@@ -86,6 +86,7 @@ static void MX_TIM3_Init(void);
 #define PERSCALE		55999
 #define PRIODE			2999
 uint16_t g_Key = 0; /* 按键检测 */
+uint16_t g_Shake = 0; /* 抖动检测 */
 uint16_t g_Infrared = 0; /* 红外检测 */
 uint16_t g_Machin_Run = 0; /* 用于开 */
 uint16_t g_Machin_Reverse = 0;/* 用于关 */
@@ -160,7 +161,7 @@ int main(void)
     }
     
     if(g_Key == 4){
-        HAL_TIM_Base_Stop_IT(&htim3);
+        //HAL_TIM_Base_Stop_IT(&htim3);
         HAL_TIM_Base_Start_IT(&htim1);
         Machin_GPIO_Control(CLOSEFLAG);
         g_Machin_Close = 0;
@@ -178,7 +179,7 @@ int main(void)
     if(g_Machin_Run == 1){
         Machin_GPIO_Control(PAUSEFLAG);
 		HAL_TIM_Base_Stop(&htim1);
-        if(g_Machin_Close == 1) {
+        if(g_Machin_Close == 1 && g_Key == 0) {
             HAL_TIM_Base_Start_IT(&htim3);
             g_Machin_Close = 0;
         } else {
@@ -256,9 +257,9 @@ static void MX_TIM1_Init(void)
 
   /* USER CODE END TIM1_Init 1 */
   htim1.Instance = TIM1;
-  htim1.Init.Prescaler = PERSCALE;
+  htim1.Init.Prescaler = 55999;
   htim1.Init.CounterMode = TIM_COUNTERMODE_UP;
-  htim1.Init.Period = PRIODE;
+  htim1.Init.Period = 4999;
   htim1.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
   htim1.Init.RepetitionCounter = 0;
   htim1.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_ENABLE;
@@ -302,9 +303,9 @@ static void MX_TIM3_Init(void)
 
   /* USER CODE END TIM3_Init 1 */
   htim3.Instance = TIM3;
-  htim3.Init.Prescaler = PERSCALE;
+  htim3.Init.Prescaler = 55999;
   htim3.Init.CounterMode = TIM_COUNTERMODE_UP;
-  htim3.Init.Period = PRIODE;
+  htim3.Init.Period = 4999;
   htim3.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
   htim3.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_ENABLE;
   if (HAL_TIM_Base_Init(&htim3) != HAL_OK)
@@ -350,10 +351,18 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
   HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
 
-  /*Configure GPIO pins : PA3 PA5 */
-  GPIO_InitStruct.Pin = GPIO_PIN_3|GPIO_PIN_5;
+  /*Configure GPIO pins : PA3 PA5 PA6 */
+  GPIO_InitStruct.Pin = GPIO_PIN_3|GPIO_PIN_5|GPIO_PIN_6;
   GPIO_InitStruct.Mode = GPIO_MODE_IT_RISING;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
+  HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
+
+  /*Configure GPIO pins : PA9 PA10 */
+  GPIO_InitStruct.Pin = GPIO_PIN_9|GPIO_PIN_10;
+  GPIO_InitStruct.Mode = GPIO_MODE_AF_PP;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_HIGH;
+  GPIO_InitStruct.Alternate = GPIO_AF1_USART1;
   HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
 
 }
@@ -403,18 +412,25 @@ void StopClkInit(void)
     SystemClock_Config();
 }
 
+void InterruptProcess(void)
+{
+    if((g_Infrared == 0) && (g_Machin_Close == 0)) {
+        g_Infrared = 1;
+        StopClkInit();
+    }
+}
 void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
 {
     switch(GPIO_Pin)
     {
         case GPIO_PIN_3:
-            if(g_Infrared == 0) {
-                g_Infrared = 1;
-                StopClkInit();
-            }
+            InterruptProcess(); /* 红外和抖动 加或门 */
             break;
         case GPIO_PIN_5:
             g_Key +=2;
+            break;
+        case GPIO_PIN_6:
+            InterruptProcess();
             break;
         default:
             break;
