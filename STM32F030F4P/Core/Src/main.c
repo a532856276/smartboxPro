@@ -83,7 +83,7 @@ static void MX_TIM3_Init(void);
 #define OPENFLAG    0
 #define CLOSEFLAG    1
 #define PAUSEFLAG    2
-#define PERSCALE		55999
+#define PERSCALE		7999
 #define PRIODE			2999
 uint16_t g_Key = 0; /* 按键检测 */
 uint16_t g_Shake = 0; /* 抖动检测 */
@@ -135,7 +135,7 @@ int main(void)
     Infraread_GPIO_Init();
     Stop_Mode_Init();
 
-    HAL_PWR_EnterSTOPMode(PWR_LOWPOWERREGULATOR_ON,PWR_STOPENTRY_WFI);
+    //HAL_PWR_EnterSTOPMode(PWR_LOWPOWERREGULATOR_ON,PWR_STOPENTRY_WFI);
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -170,9 +170,14 @@ int main(void)
     }
 
     if(g_Infrared == 1){
+        HAL_NVIC_DisableIRQ(EXTI2_3_IRQn);
+        __HAL_GPIO_EXTI_CLEAR_IT(GPIO_PIN_5);
+        HAL_NVIC_DisableIRQ(EXTI4_15_IRQn);
+        __HAL_GPIO_EXTI_CLEAR_IT(GPIO_PIN_3);
         HAL_TIM_Base_Start_IT(&htim1);
         Machin_GPIO_Control(OPENFLAG);
         g_Machin_Close = 1;
+			g_Machin_Run = 0;
         g_Infrared = 0;
     }
 
@@ -182,8 +187,14 @@ int main(void)
         if(g_Machin_Close == 1 && g_Key == 0) {
             HAL_TIM_Base_Start_IT(&htim3);
             g_Machin_Close = 0;
+					g_Machin_Reverse = 0;
         } else {
-            HAL_PWR_EnterSTOPMode(PWR_LOWPOWERREGULATOR_ON,PWR_STOPENTRY_WFI);
+            __HAL_GPIO_EXTI_CLEAR_IT(GPIO_PIN_3);
+            __HAL_GPIO_EXTI_CLEAR_IT(GPIO_PIN_5);
+            HAL_NVIC_EnableIRQ(EXTI4_15_IRQn);
+            HAL_NVIC_EnableIRQ(EXTI2_3_IRQn);
+					g_Infrared = 0;
+            //HAL_PWR_EnterSTOPMode(PWR_LOWPOWERREGULATOR_ON,PWR_STOPENTRY_WFI);
         }
         g_Machin_Run = 0;
     }
@@ -257,9 +268,9 @@ static void MX_TIM1_Init(void)
 
   /* USER CODE END TIM1_Init 1 */
   htim1.Instance = TIM1;
-  htim1.Init.Prescaler = 55999;
+  htim1.Init.Prescaler = 7999;
   htim1.Init.CounterMode = TIM_COUNTERMODE_UP;
-  htim1.Init.Period = 4999;
+  htim1.Init.Period = 2999;
   htim1.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
   htim1.Init.RepetitionCounter = 0;
   htim1.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_ENABLE;
@@ -303,9 +314,9 @@ static void MX_TIM3_Init(void)
 
   /* USER CODE END TIM3_Init 1 */
   htim3.Instance = TIM3;
-  htim3.Init.Prescaler = 55999;
+  htim3.Init.Prescaler = 7999;
   htim3.Init.CounterMode = TIM_COUNTERMODE_UP;
-  htim3.Init.Period = 4999;
+  htim3.Init.Period = 2999;
   htim3.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
   htim3.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_ENABLE;
   if (HAL_TIM_Base_Init(&htim3) != HAL_OK)
@@ -352,7 +363,7 @@ static void MX_GPIO_Init(void)
   HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
 
   /*Configure GPIO pins : PA3 PA5 PA6 */
-  GPIO_InitStruct.Pin = GPIO_PIN_3|GPIO_PIN_5|GPIO_PIN_6;
+  GPIO_InitStruct.Pin = GPIO_PIN_3|GPIO_PIN_5;
   GPIO_InitStruct.Mode = GPIO_MODE_IT_RISING;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
@@ -399,6 +410,9 @@ static void Infraread_GPIO_Init(void)
     
     HAL_NVIC_SetPendingIRQ(EXTI2_3_IRQn);
     HAL_NVIC_EnableIRQ(EXTI2_3_IRQn);
+
+    HAL_NVIC_SetPendingIRQ(EXTI4_15_IRQn);
+    HAL_NVIC_EnableIRQ(EXTI4_15_IRQn);
 }
 
 static void Stop_Mode_Init(void)
@@ -408,8 +422,8 @@ static void Stop_Mode_Init(void)
 
 void StopClkInit(void)
 {
-    __HAL_RCC_HSI_ENABLE();
-    SystemClock_Config();
+    //__HAL_RCC_HSI_ENABLE();
+    //SystemClock_Config();
 }
 
 void InterruptProcess(void)
@@ -427,10 +441,11 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
             InterruptProcess(); /* 红外和抖动 加或门 */
             break;
         case GPIO_PIN_5:
-            g_Key +=2;
+            InterruptProcess();
+            //g_Key +=2;
             break;
         case GPIO_PIN_6:
-            InterruptProcess();
+            //;
             break;
         default:
             break;

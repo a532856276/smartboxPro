@@ -195,10 +195,7 @@ void EXTI2_3_IRQHandler(void)
   if(__HAL_GPIO_EXTI_GET_IT(GPIO_PIN_3) != RESET) 
   { 
     HAL_GPIO_EXTI_IRQHandler(GPIO_PIN_3);
-  } else {
-    HAL_GPIO_EXTI_IRQHandler(GPIO_PIN_2);
   }
-    
 }
 
 void EXTI4_15_IRQHandler(void)
@@ -206,10 +203,7 @@ void EXTI4_15_IRQHandler(void)
     if(__HAL_GPIO_EXTI_GET_IT(GPIO_PIN_5) != RESET) 
     { 
         HAL_GPIO_EXTI_IRQHandler(GPIO_PIN_5);
-     } else if(__HAL_GPIO_EXTI_GET_IT(GPIO_PIN_6) != RESET) 
-    { 
-        HAL_GPIO_EXTI_IRQHandler(GPIO_PIN_6);
-    }
+     }
 }
 /* USER CODE END 1 */
 /************************ (C) COPYRIGHT STMicroelectronics *****END OF FILE****/
