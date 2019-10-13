@@ -50,10 +50,10 @@ def ContractOrderInfoNew():
                 else:
                     if buyProfit > g_BuyMaxProfit:
                         g_BuyMaxProfit = buyProfit
-                    elif buyProfit <= g_BuyMaxProfit * 0.9 and buyProfit >= g_BuyMaxProfit * 0.5:
+                    elif buyProfit <= g_BuyMaxProfit * 0.92 and buyProfit >= g_BuyMaxProfit * 0.5:
                         g_OrderSellCloseEvent.set()  #平多
                         logger.info(u'多单利润 -- 需要平多')
-            logger.info(u'多单利润B({0}/({1}))'.format(buyProfit, g_BuyMaxProfit))
+            logger.info(u'多单利润A({0}/({1}))'.format(buyProfit, g_BuyMaxProfit))
         if value['direction'] == "sell":
             orderPriceThreadLock.acquire()  # 获取线程价格锁
             # logger.info(u'空单利润A({0})'.format(value['profit']))
@@ -67,15 +67,17 @@ def ContractOrderInfoNew():
                 if sellProfit <= FIXCLOSEPROFIT:
                     g_OrderBuyCloseEvent.set()  #平空
             else:
-                if g_BuyMaxProfit == 0:
-                    g_BuyMaxProfit = sellProfit
+                if g_SellMaxProfit == 0:
+                    g_SellMaxProfit = sellProfit
                 else:
                     if sellProfit > g_SellMaxProfit:
-                        g_BuyMaxProfit = sellProfit
-                    elif sellProfit <= g_SellMaxProfit * 0.9 and sellProfit >= g_SellMaxProfit * 0.5:
+                        g_SellMaxProfit = sellProfit
+                    elif sellProfit <= g_SellMaxProfit * 0.92 and sellProfit >= g_SellMaxProfit * 0.5:
                         g_OrderBuyCloseEvent.set()  #平空
-                        logger.info(u'空单利润---({0}/{1}) 减小需要平空'.format(sellProfit, g_BuyMaxProfit))
-            logger.info(u'空单利润B({0}/{1})'.format(sellProfit, g_BuyMaxProfit))
+                        logger.info(u'空单利润---({0}/{1}) 减小需要平空'.format(sellProfit, g_SellMaxProfit))
+                    else:
+                        pass
+            logger.info(u'空单利润B({0}/{1})'.format(sellProfit, g_SellMaxProfit))
     if contractBuyInfoFlag == 0:
         orderPriceThreadLock.acquire()  # 获取线程价格锁
         # logger.info(u'多单利润({0})'.format(0))
@@ -182,12 +184,14 @@ if __name__ == "__main__":
                 msgErrorCnt = msgErrorCnt + 1
                 if msgErrorCnt >= 5:
                     time.sleep(1)
+                print("main process getMsgErrorCnt {0}".format(msgErrorCnt))
                 continue
             
             msgErrorCnt = 0
 
             if marketToOrder is not None and marketToOrder['status'] == "ok":
                 if len(marketToOrder['data']) == 0:
+                    print("main process data is NULL")
                     continue
 
                 global g_halfOfLastKline

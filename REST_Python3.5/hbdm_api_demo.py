@@ -729,7 +729,7 @@ def OrderBuyCloseTread(args, kwargs):
             if opt_result is not None and opt_result['status'] == "ok":
                 g_OrderSellOpenFlag = False
                 print(u'OrderBuyCloseTread 平空交易线程 执行成功！！！volume({0})'.format(OrderGetVolume()))
-                logger.info(u'平空交易线程 执行成功！！！volume({0})optResult({1})'.format(volume, optResult))
+                logger.info(u'平空交易线程 执行成功！！！volume({0})optResult({1})'.format(volume, opt_result))
             else:
                 print(u'OrderBuyCloseTread 平空交易线程 执行失败！失败！！'
                      u'失败！！！volume({0}) opt_result({1})'.format(OrderGetVolume(), opt_result))
