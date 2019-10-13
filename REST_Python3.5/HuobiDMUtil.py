@@ -15,7 +15,7 @@ import requests
 #import urlparse   # urllib.parse in python 3
 
 # timeout in 5 seconds:
-TIMEOUT = 5
+TIMEOUT = (3,3)
 
 #各种请求,获取数据方式
 def http_get_request(url, params, add_to_headers=None):
@@ -27,7 +27,12 @@ def http_get_request(url, params, add_to_headers=None):
         headers.update(add_to_headers)
     postdata = urllib.parse.urlencode(params)
     try:
+        requests.adapters.DEFAULT_RETRIES =5    # 增加重连次数
+        s = requests.session()
+        s.keep_alive = False   # 关闭多余连接
+        #response = s.get(url, postdata, headers=headers, timeout=TIMEOUT)
         response = requests.get(url, postdata, headers=headers, timeout=TIMEOUT)
+        #response.keep_alive = False
         if response.status_code == 200:
             return response.json()
         else:

@@ -26,52 +26,59 @@ def fallingHasRising(low, close):
 
 def ishammer(inputdata):
     #是否为锤子线
+    upline = 0
+    dwnline = 0
+    modline = 0
     if inputdata['close'] > inputdata['open']:
         upline = inputdata['high']- inputdata['close']
         dwnline = inputdata['open'] - inputdata['low']
         modline = inputdata['close'] - inputdata['open']
-        
-        print("para:up:{0},dwn:{1},mod:{2}".format(upline, dwnline, modline))
-            
-        if upline == 0 and dwnline < modline/2:
-            return myEnum.RISING_ONLY_DWN
-        elif dwnline == 0 and upline < modline/2:
-            return myEnum.RISING_ONLY_UP
-        elif upline < dwnline and dwnline > modline * 2:
-            #判定为阳-锤子
-            return myEnum.RISING_HAMMER_DWN.value
-        elif upline > dwnline and upline > modline * 2:
-            #判定为阳-倒锤子
-            return myEnum.RISING_HAMMER_UP.value
-        elif modline == 0 and upline > dwnline:
-            return myEnum.RISING_EQ_UP
-        elif modline == 0 and upline == dwnline:
-            return myEnum.RISING_EQ_EQ
-        elif modline == 0 and upline < dwnline:
-            return myEnum.RISING_EQ_DWN
-        else:
-            return None
     else:
         upline = inputdata['high'] - inputdata['open']
         dwnline = inputdata['close'] - inputdata['low']
         modline = inputdata['open'] - inputdata['close']
         
-        if upline == 0 and dwnline < modline/2:
-            return myEnum.FALLING_ONLY_DWN
-        elif dwnline == 0 and upline < modline/2:
-            return myEnum.FALLING_ONLY_UP
-        elif upline < dwnline and modline != 0 and dwnline > modline * 2:
-            return myEnum.FALLING_HAMMER_DWN.value
-        elif upline > dwnline and modline != 0 and upline > modline * 2:
-            return myEnum.FALLING_HAMMER_UP.value
-        elif modline == 0 and upline > dwnline:
-            return myEnum.RISING_EQ_UP
-        elif modline == 0 and upline == dwnline:
-            return myEnum.RISING_EQ_EQ
-        elif modline == 0 and upline < dwnline:
-            return myEnum.RISING_EQ_DWN
-        else:
-            return None
+    print("para:up:{0},dwn:{1},mod:{2}".format(upline, dwnline, modline))
+            
+    if upline < 2 and (dwnline > modline or dwnline < modline/2):
+        return myEnum.RISING_ONLY_DWN
+    elif dwnline < 2 and (upline > modline or upline < modline/2):
+        return myEnum.RISING_ONLY_UP
+    elif upline < dwnline and dwnline > modline * 2:
+        #判定为阳-锤子
+        return myEnum.RISING_HAMMER_DWN.value
+    elif upline > dwnline and upline > modline * 2:
+        #判定为阳-倒锤子
+        return myEnum.RISING_HAMMER_UP.value
+    elif modline == 0 and upline > dwnline:
+        return myEnum.RISING_EQ_UP
+    elif modline == 0 and upline == dwnline:
+        return myEnum.RISING_EQ_EQ
+    elif modline == 0 and upline < dwnline:
+        return myEnum.RISING_EQ_DWN
+    else:
+        return None
+    #else:
+    #    upline = inputdata['high'] - inputdata['open']
+    #    dwnline = inputdata['close'] - inputdata['low']
+    #    modline = inputdata['open'] - inputdata['close']
+    #    
+    #    if upline == 0 and dwnline < modline/2:
+    #        return myEnum.FALLING_ONLY_DWN
+    #    elif dwnline == 0 and upline < modline/2:
+    #        return myEnum.FALLING_ONLY_UP
+    #    elif upline < dwnline and modline != 0 and dwnline > modline * 2:
+    #        return myEnum.FALLING_HAMMER_DWN.value
+    #    elif upline > dwnline and modline != 0 and upline > modline * 2:
+    #        return myEnum.FALLING_HAMMER_UP.value
+    #    elif modline == 0 and upline > dwnline:
+    #        return myEnum.RISING_EQ_UP
+    #    elif modline == 0 and upline == dwnline:
+    #        return myEnum.RISING_EQ_EQ
+    #    elif modline == 0 and upline < dwnline:
+    #        return myEnum.RISING_EQ_DWN
+    #    else:
+    #        return None
     
 def getUpOrDwn(inputdata):
     if inputdata['close']> inputdata['open']:
@@ -79,6 +86,14 @@ def getUpOrDwn(inputdata):
     else:
         return 0
         
+
+def getHalfOfKline(inputdata):
+    if inputdata['close'] < inputdata['open']:
+        return (inputdata['open'] -  inputdata['close'] ) / 2 + inputdata['close'] 
+    else:
+        return (inputdata['close'] - inputdata['open']) / 2 + inputdata['open']
+
+
 def getType(inputdata1, inputdata2):
     if getUpOrDwn(inputdata1) > getUpOrDwn(inputdata2):
         halfValue = (inputdata1['open'] + inputdata1['close']) / 2
@@ -96,7 +111,7 @@ def getType(inputdata1, inputdata2):
 
         if halfValue >= inputdata2['close']:
             return myEnum.RISING_TO_FALLING
-    else:
+    elif getUpOrDwn(inputdata1) < getUpOrDwn(inputdata2):
         halfValue = (inputdata1['open'] + inputdata1['close']) / 2
         
         if inputdata1['open'] >= inputdata2['close'] and inputdata1['close'] <= inputdata2['open']:
@@ -111,6 +126,10 @@ def getType(inputdata1, inputdata2):
 
         if halfValue <= inputdata2['close']:
             return myEnum.FALLING_TO_RISING
+    elif getUpOrDwn(inputdata1) == getUpOrDwn(inputdata2):
+        return ishammer(inputdata2)
+
+        #return None
         
 def testCase(testName, testValue, testTarget):
     if testValue == testTarget:

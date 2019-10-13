@@ -24,15 +24,17 @@ class TimeBase(threading.Thread):
         while self.runFlag:
             time_now = time.localtime()
             time_now_min = time.strftime("%M", time_now)  # 刷新
-
+            print(u'时间nowTime:1')
             if int(time_now_min) % self.sleepTime == 0: #此处设置每天定时的时间
                 if self.doFlag is False:
+                    time.sleep(1) #等待1s保证获取到新的kline
                     self.fun()
                     self.doFlag  = True
                     print(u'时间定时器工作{0}min,nowTime:{1}'.format(self.sleepTime,time_now))
                     #time.sleep(self.sleepTime)
             else:
                 self.doFlag = False
+            time.sleep(1)
 
     @abstractmethod
     def fun(self):

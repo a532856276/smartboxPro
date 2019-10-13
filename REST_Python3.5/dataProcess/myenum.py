@@ -7,6 +7,7 @@ from enum import IntEnum
 
 g_PrintFlag = True
 
+
 class myEnum(IntEnum):
     FALLING=0
     FALLING_HAMMER_DWN=1 # 阴锤

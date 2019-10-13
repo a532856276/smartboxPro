@@ -16,8 +16,12 @@ import csv
 from queue import Queue  # LILO队列
 import math  # 先导入math模块
 from dataProcess.dataProcess import *
+from dataProcess.mycommondef import *
+
+g_RebootFlag = True
+
 FIXOPENPROFIT = 0.0005  # 持仓利润
-FIXCLOSEPROFIT = -0.0007  # 持仓利润
+FIXCLOSEPROFIT = -0.0003  # 持仓利润
 # a1 = 3.4
 # a2 = 3.6
 # a1 = math.ceil(a1)
@@ -30,15 +34,15 @@ FIXCLOSEPROFIT = -0.0007  # 持仓利润
 # 向上取整
 
 # 加入日志
-import logging
-logger = logging.getLogger(__name__)
-logger.setLevel(level = logging.INFO)
-handler = logging.FileHandler("log.txt")
-handler.setLevel(logging.INFO)
+#import logging
+#logger = logging.getLogger(__name__)
+#logger.setLevel(level = logging.INFO)
+#handler = logging.FileHandler("log20190928135728.txt")
+#handler.setLevel(logging.INFO)
 # formatter = logging.Formatter('%(asctime)s %(name)s:[%(levelname)s]%(message)s')
-formatter = logging.Formatter('%(asctime)s [%(levelname)s]%(message)s')
-handler.setFormatter(formatter)
-logger.addHandler(handler)
+#formatter = logging.Formatter('%(asctime)s [%(levelname)s]%(message)s')
+#handler.setFormatter(formatter)
+#logger.addHandler(handler)
 
 # logger.info("Start print log")
 # logger.debug("Do something")
@@ -61,14 +65,17 @@ from MyTimer import MyTimer
 KlineQueue = Queue()
 #### input huobi dm url
 ##"https://api.hbdm.com"如果无法访问请使用："https://api.btcgateway.pro"。
-URL = 'https://api.btcgateway.pro'
+urlList = ['https://api.hbdm.com', 'https://api.btcgateway.pro']
+URL = urlList[1]
+#URL = 'https://api.hbdm.com'
+
 PROCEEMODE = 1 # 0 - AI; 1 - process By User
 ####  input your access_key and secret_key below:
 # ACCESS_KEY = '0409a0a7-a07c0d0a-frbghq7rnm-f4a63'
 # SECRET_KEY = 'f29359de-332fad6e-d1221b3d-aa55c'
-ACCESS_KEY = 'd13c5a08-93701a79-mjlpdje3ld-3caf3'
-SECRET_KEY = '8c167c7c-b8f30b88-e73e6d74-aa16f'
-g_symbol = "BCH"
+ACCESS_KEY = '299beddf-ur2fg6h2gf-47175577-46461'
+SECRET_KEY = '0f7f9c71-6fdbd114-e57f58ce-6d9a5'
+g_symbol = "BTC"
 # this_week(当周) next_week(下周) quarter(季度)
 g_ContractType = "quarter"
 g_ContractCode = ""
@@ -80,18 +87,14 @@ g_OrderId = 0
 g_ContractOpt = 0  # 合约操作方法
 g_ContractOrderVolume = 0  # 交易量，几个任务都是顺序执行，暂不需要线程同步，以后考虑同步问题
 
-g_OrderBuyOpenEvent = threading.Event()  # 触发买入开仓 -- 开多线程
-g_OrderSellOpenEvent = threading.Event()  # 触发卖出开仓 -- 开空线程
-g_OrderBuyCloseEvent = threading.Event()  # 触发买入平仓 -- 平空线程
-g_OrderSellCloseEvent = threading.Event()  # 触发买入平仓 -- 平空线程
-g_OrderProcessByOptEvent = threading.Event()  # 触发交易线程处理
-
 lineQueue = Queue()  # 存储最近10次的变换方向
 
 g_ContractBuyInfo = OrderInfo()  # 多头订单信息
 g_ContractSellInfo = OrderInfo()  # 空头订单信息
 
 g_ContractProcessPercent = [0, 1, 2, 3, 3, 6, 8, 8, 9, 9, 10]  # 不同的数字是需要处理不同的百分比
+
+
 
 
 #### another account:
@@ -167,19 +170,36 @@ def GetComtractDepth(symbol='%s%s' % (g_symbol, "_CQ"), type='step0'):
 
 g_LastKlinOpenPrice = 0
 
-
-def GetContractKline(symbol='%s%s' % (g_symbol, "_CQ"), timeLine="60min"):
-    print(u' 获取K线数据 ')
-    print(symbol)
+def GetContractKlineTime(symbol='%s%s' % (g_symbol, "_CQ"), timeLine="15min"):
+    #print(u' 获取K线数据 ')
     # pprint (dm.get_contract_kline(symbol=symbol, period=timeLine, size=20))
-    res = dm.get_contract_kline(symbol=symbol, period=timeLine, size=20)
+    getSize = 1
+    return dm.get_contract_kline(symbol=symbol, period=timeLine, size=getSize)
+
+
+def GetContractKline(symbol='%s%s' % (g_symbol, "_CQ"), timeLine="15min"):
+    print(u' 获取K线数据 ')
+    getSize = 20
+    global g_RebootFlag
+    if g_RebootFlag is True:
+        getSize = 20
+        g_RebootFlag = False
+    else:
+        getSize = 2
+    res = dm.get_contract_kline(symbol=symbol, period=timeLine, size=getSize)
+
+    if getSize == 20:
+        print(res)
+
     if res['status'] is 'fail':
         print("get Kline Error")
-        return
+        g_RebootFlag = True
+        return False
     if PROCEEMODE == 1:
         dataDecodeFromNet(res["data"])
     else:
         DataDecode(res["data"])
+    return True
     
 
 
@@ -215,6 +235,10 @@ def GetContractPositionInfo(symbol=g_symbol):
     return dm.get_contract_position_info(symbol=symbol)
 
 
+def GetContractPositionInfoNew(symbol=g_symbol):
+    print(u' 获取用户持仓信息New ')
+    return dm.get_contract_position_info(symbol=symbol)
+
 # 开平方向
 # 开多：买入开多(direction用buy、offset用open)
 # 平多：卖出平多(direction用sell、offset用close)
@@ -237,10 +261,7 @@ def SendContractOrder(symbol=g_symbol, contract_type=g_ContractType, contract_co
             备注：如果contract_code填了值，那就按照contract_code去下单，如果contract_code没有填值，则按照symbol+contract_type去下单。
             :
             """
-    print(u' 合约下单 ')
-    # pprint(dm.send_contract_order(symbol=symbol, contract_type=contract_type, contract_code=contract_code,
-    #                               client_order_id=client_order_id, price=price, volume=volume, direction=direction,
-    #                               offset=offset, lever_rate=lever_rate, order_price_type=order_price_type))
+    print(u' 合约下单:direction:{0} offset:{1} volume:{2}'.format(direction, offset, volume))
     return dm.send_contract_order(symbol=symbol, contract_type=contract_type, contract_code=contract_code,
                                   client_order_id=client_order_id, price=price, volume=volume, direction=direction,
                                   offset=offset, lever_rate=lever_rate, order_price_type=order_price_type)
@@ -507,12 +528,13 @@ def get_time_stamp():
 def ContractOrderInfo():
     res = 0
     contractPositionInfo = GetContractPositionInfo()
-    # print(u'ContractOrderInfo 查询订单: {0}'.format(contractPositionInfo))
     if contractPositionInfo is None or contractPositionInfo["status"] != "ok":
         print(u'ContractOrderInfo 查询订单失败 {0}'.format(contractPositionInfo))
         return res
+    print(u'ContractOrderInfo 查询订单: {0}'.format(contractPositionInfo))
 
     global g_ContractBuyInfo, g_ContractSellInfo,g_ContractBuyProfit, g_ContractSellProfit
+    global g_OrderBuyOpenPrice, g_OrderSellOpenPrice
 
     contractBuyInfoFlag= 0
     contractSellInfoFlag = 0
@@ -521,17 +543,19 @@ def ContractOrderInfo():
         if value['direction'] == "buy":
             orderPriceThreadLock.acquire()  # 获取线程价格锁
             g_ContractBuyInfo.setValue(value['volume'], value['available'], value['cost_open'], value['profit'])
+            g_OrderBuyOpenPrice = value['cost_open']
             orderPriceThreadLock.release()  # 释放线程锁
             contractBuyInfoFlag = 1
             g_ContractBuyProfit = value['profit']
             if g_ContractBuyProfit >= FIXOPENPROFIT or g_ContractBuyProfit <= FIXCLOSEPROFIT:
                 g_OrderSellCloseEvent.set()  # 平多
-                # logger.info(u'多单利润B({0})'.format(g_ContractBuyProfit))
+                logger.info(u'多单利润B({0})'.format(g_ContractBuyProfit))
             # logger.info(u'多单利润A({0})'.format(value['profit']))
         if value['direction'] == "sell":
             orderPriceThreadLock.acquire()  # 获取线程价格锁
             # logger.info(u'空单利润A({0})'.format(value['profit']))
             g_ContractSellInfo.setValue(value['volume'], value['available'], value['cost_open'], value['profit'])
+            g_OrderSellOpenPrice = value['cost_open']
             orderPriceThreadLock.release()  # 释放线程锁
             contractSellInfoFlag = 1
             g_ContractSellProfit = value['profit']
@@ -546,6 +570,7 @@ def ContractOrderInfo():
         orderPriceThreadLock.acquire()  # 获取线程价格锁
         # logger.info(u'多单利润({0})'.format(0))
         g_ContractBuyInfo.setValue()
+        g_OrderBuyOpenPrice = 0
         orderPriceThreadLock.release()  # 释放线程锁
         g_ContractBuyProfit = 0
 
@@ -553,10 +578,13 @@ def ContractOrderInfo():
         orderPriceThreadLock.acquire()  # 获取线程价格锁
         # logger.info(u'空单利润({0})'.format(0))
         g_ContractSellInfo.setValue()
+        g_OrderSellOpenPrice = 0
         orderPriceThreadLock.release()  # 释放线程锁
         g_ContractSellProfit = 0
 
     return res
+
+
 
 
 def OrderSetVolume(direction, volnumByPercent):
@@ -574,8 +602,8 @@ def OrderSetVolume(direction, volnumByPercent):
             tampVolume = tempSellVolume
         else:
             tampVolume = math.ceil(tempSellVolume * volnumByPercent / 100)  # 向上取整
-        # print(u'平空配置 数量：({0}/{1})'.format(tampVolume, tempSellVolume))
-        logger.info(u'平空仓量 数量：({0}/{1})'.format(tampVolume, tempSellVolume))
+        print(u'平空配置 数量：({0}/{1} profit{2})'.format(tampVolume, tempSellVolume, profit))
+        logger.info(u'平空仓量 数量：({0}/{1} profit{2})'.format(tampVolume, tempSellVolume, profit))
     elif direction == u'平多':
         orderPriceThreadLock.acquire()  # 获取线程价格锁
         tempBuyVolmue = g_ContractBuyInfo.GetAvailable()
@@ -589,8 +617,8 @@ def OrderSetVolume(direction, volnumByPercent):
             tampVolume = tempBuyVolmue
         else:
             tampVolume = math.ceil(tempBuyVolmue * volnumByPercent / 100)  # 向上取整
-        # print(u'平多配置 数量：({0}/{1})'.format(tampVolume, tempBuyVolmue))
-        logger.info(u'平多仓量 数量：({0}/{1})'.format(tampVolume, tempBuyVolmue))
+        print(u'平多配置 数量：({0}/{1}:profit{2})'.format(tampVolume, tempBuyVolmue,profit))
+        logger.info(u'平多仓量 数量：({0}/{1} profit{2})'.format(tampVolume, tempBuyVolmue, profit))
     # else:
     #     tampVolume = 0
     #
@@ -623,17 +651,19 @@ def OrderSellOpenTread(args, kwargs):
         # else:
         #     volume = 0
         volume = 1
-
+        global g_OrderSellOpenFlag
         if volume > 0:
             print(u'OrderSellOpenTread 开空命令：{0}'.format(volume))
             # logger.info(u'开空 执行成功！！！volume({0})price({1})'.format(volume, g_lastPrice))
             optResult = SendContractOrder(volume=volume, direction="sell", offset="open", order_price_type="opponent")
             if optResult is not None and optResult['status'] == "ok":
-                # print(u'开空命令：{0} 成功'.format(volume))
+                print(u'开空命令：{0} 成功:optResult::{1}'.format(volume, optResult))
                 logger.info(u'开空 执行成功！！！volume({0})volume({1})'.format(volume, volume))
+                g_OrderSellOpenFlag = True
             else:
-                # print(u'开空命令：{0} 失败 optResult:({1})'.format(volume, optResult))
+                print(u'开空命令：{0} 失败 optResult:({1})'.format(volume, optResult))
                 logger.error(u'开空 执行失败！！！volume({0}), error message:{1}'.format(volume, optResult))
+                g_OrderSellOpenFlag = False
         # 撤销未成交的订单
         # Cancel_All_Contract_order()
 
@@ -645,26 +675,21 @@ def OrderBuyOpenTread(args, kwargs):
     while 1:
         g_OrderBuyOpenEvent.wait()
         g_OrderBuyOpenEvent.clear()
-        # if g_UpDownDir - OrderBuyOpenTread.last >= 2:
-        #     OrderBuyOpenTread.last = g_UpDownDir
-        #     volume = 1
-        # else:
-        #     volume = 0
-
         volume = 1
+        global g_OrderBuyOpenFlag
+
         if volume > 0:
             print(u'OrderSellOpenTread 开多命令：{0}'.format(volume))
             # logger.info(u'开多 执行成功！！！volume({0})price({1})'.format(volume, g_lastPrice))
             optResult = SendContractOrder(volume=volume, direction="buy", offset="open", order_price_type="opponent")
             if optResult is not None and optResult['status'] == "ok":
-                # print(u'开多命令：{0} 成功'.format(volume))
-                logger.info(u'开多 执行成功！！！volume({0})volume({1})'.format(volume, volume))
+                g_OrderBuyOpenFlag = True
+                print(u'开多命令：{0} 成功:{1}'.format(volume, optResult))
+                logger.info(u'开多 执行成功！！！volume({0})volume({1})optResult({2})'.format(volume, volume, optResult))
             else:
+                g_OrderBuyOpenFlag = False
                 print(u'开多命令：({0})-- 失败 optResult:({1})'.format(volume, optResult))
                 logger.error(u'开多 执行失败！！！volume({0}), error message:{1}'.format(volume, optResult))
-
-        # 撤销未成交的订单
-        # Cancel_All_Contract_order()
 
 
 def OrderSellCloseTread(args, kwargs):
@@ -674,16 +699,19 @@ def OrderSellCloseTread(args, kwargs):
         g_OrderSellCloseEvent.clear()
         OrderSetVolume(u"平多", 30)  # 平多 30 %
         # print(u'OrderSellCloseTread 进入平多-交易线程')
+        global g_OrderBuyOpenFlag
 
         volume = int(OrderGetVolume())
         if volume > 0:
             opt_result = SendContractOrder(volume=volume, direction="sell",
                                            offset="close", order_price_type="opponent")
             if opt_result is not None and opt_result['status'] == "ok":
-                logger.info(u'平多交易线程 执行成功！！！volume({0})'.format(volume))
+                g_OrderBuyOpenFlag = False
+                print(u'OrderSellCloseTread 平多交易执行成功！！！volume({0})msg({1})'.format(volume, opt_result))
+                logger.info(u'平多交易线程 执行成功！！！volume({0})optResult({1})'.format(volume, opt_result))
             else:
                 logger.error(u'平多交易线程 执行失败！！！volume({0}), error message:{1}'.format(volume, opt_result))
-            # print(u'OrderSellCloseTread 退出平多-交易线程一次循环')
+        print(u'OrderSellCloseTread 退出平多-交易线程一次循环')
 
 
 def OrderBuyCloseTread(args, kwargs):
@@ -691,6 +719,7 @@ def OrderBuyCloseTread(args, kwargs):
     while 1:
         g_OrderBuyCloseEvent.wait()
         g_OrderBuyCloseEvent.clear()
+        global g_OrderSellOpenFlag
         OrderSetVolume(u"平空", 30)  # 平仓 30 %
         # print(u'OrderBuyCloseTread 进入平空--交易线程')
         volume = int(OrderGetVolume())
@@ -698,13 +727,23 @@ def OrderBuyCloseTread(args, kwargs):
             opt_result = SendContractOrder(volume=volume, direction="buy",
                                            offset="close", order_price_type="opponent")
             if opt_result is not None and opt_result['status'] == "ok":
-                # print(u'OrderBuyCloseTread 平空交易线程 执行成功！！！volume({0})'.format(OrderGetVolume()))
-                logger.info(u'平空交易线程 执行成功！！！volume({0})'.format(volume))
+                g_OrderSellOpenFlag = False
+                print(u'OrderBuyCloseTread 平空交易线程 执行成功！！！volume({0})'.format(OrderGetVolume()))
+                logger.info(u'平空交易线程 执行成功！！！volume({0})optResult({1})'.format(volume, optResult))
             else:
-                # print(u'OrderBuyCloseTread 平空交易线程 执行失败！失败！！'
-                #     u'失败！！！volume({0}) opt_result({1})'.format(OrderGetVolume(), opt_result))
+                print(u'OrderBuyCloseTread 平空交易线程 执行失败！失败！！'
+                     u'失败！！！volume({0}) opt_result({1})'.format(OrderGetVolume(), opt_result))
                 logger.error(u'平空交易线程 执行失败！！！volume({0}) error message:{1}'.format(volume, opt_result))
-            # print(u'OrderBuyCloseTread 退出平空--交易线程一次循环')
+        print(u'OrderBuyCloseTread 退出平空--交易线程一次循环')
+
+def GetContraInfoTread(args, kwargs):
+    while True:
+        g_GetContraInfoEvent.wait()
+        g_GetContraInfoEvent.clear()
+        OrderSetVolume(u"平空", 30)  # 平仓 30 %
+        # print(u'OrderBuyCloseTread 进入平空--交易线程')
+        ContractOrderInfo()
+        print(u'OrderBuyCloseTread 退出平空--交易线程一次循环')
 
 #if __name__ == "__main__":
 def test():
@@ -723,9 +762,9 @@ def test():
 
     #     count = 0
     #     tLast = 0
-        orderPriceThreadLock = threading.Lock()  # 创建订单价格线程锁
-        orderOptThreadLock = threading.Lock()  # 创建订单操作线程锁
-        orderVolnumeThreadLock = threading.Lock()  # 创建订单操作线程锁
+    #    orderPriceThreadLock = threading.Lock()  # 创建订单价格线程锁
+    #    orderOptThreadLock = threading.Lock()  # 创建订单操作线程锁
+    #    orderVolnumeThreadLock = threading.Lock()  # 创建订单操作线程锁
     #     # 开 4个线程，对应的触发是 g_xxxEvent 如 g_OrderBuyOpenEvent
     #     orderBuyOpenThread = threading.Thread(target=OrderBuyOpenTread, args={"OrderBuyOpenTread", 'OBuyOpenTread'})
     #     orderBuyOpenThread.start()

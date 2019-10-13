@@ -3,6 +3,9 @@
 
 from dataProcess.JudgeData import *
 from queue import Queue  # LILO????
+from dataProcess.mycommondef import *
+
+import copy
 
 # q = Queue() #创建队列对象
 # q.put(0)    #在队列尾部插入元素
@@ -17,9 +20,19 @@ KlineQueue = Queue()
 g_KlineUpDwnSquence = 0
 maxLine = []
 lowLine = []
+g_LastKline = {}
+g_LastTwoKline = 0
+g_KlineSave =[]
+g_WillDoing= 0
 def doNothing():
     pass
-
+def ProcessKline(noDo, willDo):
+    if willDo in [myEnum.RISING_HAS_FALLING, myEnum.RISING_IN_FALLING, myEnum.RISING_TO_FALLING]:
+        g_OrderSellOpenEvent.set()
+    elif willDo in[myEnum.FALLING_HAS_RISING, myEnum.FALLING_IN_RISING, myEnum.FALLING_HAS_RISING]:
+        g_OrderBuyOpenEvent.set()
+    else:
+        print("ProcessKline Error")
 
 # 相当于 getUpDwnSquence
 def dataDecodeFromNet(contractKLineLst):
@@ -29,72 +42,140 @@ def dataDecodeFromNet(contractKLineLst):
     global maxLine
     global lowLine
     global g_KlineUpDwnSquence
-    global g_PrintFlag
-    print('begin contractKLineLst:')
-    if g_PrintFlag == True:
-        print(u'入参：获取到的KLine：{0}'.format(contractKLineLst))
-    #getUpDwnSquence(contractKLineLst);
+    global g_LastKline
+    global g_WillDoing
+    global g_halfOfLastKline
 
     currentKline = 0
     lastKline = 0
 
-    if len(maxLine) and len(lowLine):
+    if len(maxLine) or len(lowLine):
         lastKline = g_KlineUpDwnSquence & 0x1
-        currentKline = getUpOrDwn(contractKLineLst[0])
-        g_KlineUpDwnSquence = g_KlineUpDwnSquence | currentKline<<idex
-        if lastKline > currentKline: # 阳阴
-            maxLine.append(contractKLineLst[idex])
-        elif lastKline < currentKline: # 阴阳
-            lowLine.append(contractKLineLst[idex])
-        else: # ͬ保持不变
-            pass
+        lastKlinePos = len(g_KlineSave) - 1
+        idex = len(contractKLineLst) - 1 - 1
         
+        g_halfOfLastKline = getHalfOfKline(contractKLineLst[idex])
+
+        currentKline = getUpOrDwn(contractKLineLst[idex])
+        g_KlineUpDwnSquence = g_KlineUpDwnSquence << 1 | currentKline
+        tempKline = copy.deepcopy(contractKLineLst[idex])
+
+        #nowStatus = ishammer(tempKline)
+        nextDoing = getType(g_KlineSave[lastKlinePos],contractKLineLst[idex])
+        #ProcessKline(nowStatus, nextDoing)
+
+        if nextDoing in [myEnum.RISING_HAS_FALLING, myEnum.RISING_IN_FALLING, myEnum.RISING_TO_FALLING]:
+            g_OrderSellOpenEvent.set()
+            logger.info(u'开空 by kLine:{0}:{1},nextDoing:{2}'.format(lastKline, currentKline, nextDoing))
+        elif nextDoing in[myEnum.FALLING_HAS_RISING, myEnum.FALLING_IN_RISING, myEnum.FALLING_HAS_RISING]:
+            g_OrderBuyOpenEvent.set()
+            logger.info(u'开多 by kLine:{0}:{1},nextDoing:{2}'.format(lastKline, currentKline, nextDoing))
+        elif nextDoing in [myEnum.RISING_ONLY_DWN,myEnum.RISING_EQ_DWN,myEnum.RISING_EQ_EQ,myEnum.RISING_EQ_UP,myEnum.RISING_HAMMER_UP,myEnum.RISING_HAMMER_DWN,myEnum.RISING_ONLY_DWN] :
+            if currentKline == 1: # and nextDoing == myEnum.RISING_ONLY_DWN:
+                g_OrderSellOpenEvent.set()
+                logger.info(u'开空 by kLine:{0}:{1},nextDoing'.format(lastKline, currentKline))
+            else:
+                g_OrderBuyOpenEvent.set()
+                logger.info(u'开多 by kLine:{0}:{1}'.format(lastKline, currentKline))
+        #if lastKline > currentKline: # 阳阴
+        #    if nextDoing in [myEnum.RISING_HAS_FALLING, myEnum.RISING_IN_FALLING, myEnum.RISING_TO_FALLING]:
+        #        g_OrderSellOpenEvent.set()
+        #        logger.info(u'开空 by kLine:{0}:{1},nextDoing:{2}'.format(lastKline, currentKline, nextDoing))
+        #    maxLine.append(tempKline)
+        #elif lastKline < currentKline: # 阴阳
+        #    if nextDoing in[myEnum.FALLING_HAS_RISING, myEnum.FALLING_IN_RISING, myEnum.FALLING_HAS_RISING]:
+        #        g_OrderBuyOpenEvent.set()
+        #        logger.info(u'开多 by kLine:{0}:{1},nextDoing:{2}'.format(lastKline, currentKline, nextDoing))
+        #    lowLine.append(tempKline)
+        #else: # ͬ保持不变
+        #    if nowStatus in [myEnum.RISING_ONLY_DWN,myEnum.RISING_EQ_DWN,myEnum.RISING_EQ_EQ,myEnum.RISING_EQ_UP,myEnum.RISING_HAMMER_UP,myEnum.RISING_HAMMER_DWN,myEnum.RISING_ONLY_DWN] :
+        #        if currentKline == 1:
+        #            g_OrderSellOpenEvent.set()
+        #            logger.info(u'开空 by kLine:{0}:{1},nextDoing:{2}'.format(lastKline, currentKline, nowStatus))
+        #        else:
+        #            g_OrderBuyOpenEvent.set()
+        #            logger.info(u'开多 by kLine:{0}:{1},nowStatus:{2}'.format(lastKline, currentKline, nowStatus))
+
+        g_LastKline = copy.deepcopy(contractKLineLst[idex])
+        g_KlineSave.append(g_LastKline)
+        
+        #getLastState()
     else:
         g_KlineUpDwnSquence = 0
-        for idex in range(len(contractKLineLst)):
+        logger.info(u' kLine:{0}'.format(contractKLineLst))
+        for idex in range(len(contractKLineLst) - 1):
             currentKline = getUpOrDwn(contractKLineLst[idex])
-            g_KlineUpDwnSquence = g_KlineUpDwnSquence | currentKline<<idex
+            g_KlineUpDwnSquence = g_KlineUpDwnSquence << 1 | currentKline
+            tempKline = copy.deepcopy(contractKLineLst[idex])
             if lastKline > currentKline: # 阳阴
-                maxLine.append(contractKLineLst[idex])
+                maxLine.append(tempKline)
             elif lastKline < currentKline: # 阴阳
-                lowLine.append(contractKLineLst[idex])
+                lowLine.append(tempKline)
             else: # ͬ保持不变
                 pass
             lastKline = currentKline
-    
-    if g_PrintFlag == True:
-        print("g_KlineUpDwnSquence:0x%x"%g_KlineUpDwnSquence)
-        print(u'出参：计算后：g_KlineUpDwnSquence{0},maxLine{1}, lowLine{2}'.format(g_KlineUpDwnSquence,maxLine, lowLine))
-    print('end KlineQue:')
+            g_LastKline.clear()
+            g_LastKline = copy.deepcopy(contractKLineLst[idex])
+            g_halfOfLastKline = getHalfOfKline(contractKLineLst[idex])
+            g_KlineSave.append(tempKline)
+
+def getLastState():
+    lastTwoKline = g_KlineUpDwnSquence & 0x3
+    lenAll = len(g_KlineSave)
+    is_Hammer = ishammer(g_KlineSave[lenAll-1])
+    if lastTwoKline == 0 or lastTwoKline == 3:
+        lastThrKline = g_KlineUpDwnSquence & 0x7
+        if is_Hammer is myEnum.RISING_EQ_UP :
+            if lastTwoKline == 0:
+                g_OrderBuyOpenEvent.set() #开多
+                logger.info(u'开多 by kLine:{0},{1}'.format(lastTwoKline, is_Hammer))
+                if lastThrKline == 0:
+                    g_OrderBuyOpenEvent.set() #开多
+                    logger.info(u'开多 by kLine:{0},{1}'.format(lastTwoKline, is_Hammer))
+        elif is_Hammer is myEnum.RISING_EQ_EQ:
+            pass
+        elif is_Hammer is myEnum.RISING_EQ_DWN:
+            if lastTwoKline == 3:
+                g_OrderSellOpenEvent.set() #开空
+                logger.info(u'开空 by kLine:{0},{1}'.format(lastTwoKline, is_Hammer))
+                if lastThrKline == 7:
+                    g_OrderBuyOpenEvent.set() #开多
+                    logger.info(u'开多 by kLine:{0},{1}'.format(lastTwoKline, is_Hammer))
+        
+    else: # 2
+        if is_Hammer is None:
+            pass
+        elif is_Hammer is myEnum.RISING_ONLY_DWN.value or is_Hammer is myEnum.RISING_ONLY_UP.value\
+          or is_Hammer is myEnum.RISING_HAMMER_DWN.value or is_Hammer is myEnum.RISING_HAMMER_UP.value:
+            if lastTwoKline == 1:
+                g_OrderBuyOpenEvent.set() #开多
+                logger.info(u'开多 by kLine:{0},{1}'.format(lastTwoKline, is_Hammer))
+            else:
+                g_OrderSellOpenEvent.set() #开空
+                logger.info(u'开空 by kLine:{0},{1}'.format(lastTwoKline, is_Hammer))
 
 
 def testdataDecodeFromNet():
-    inputdata = [{'amount': 1501.942292389007, 'close': 322.022, 'count': 603, 'high': 322.527, 'id': 1569096000, 'low': 321.864, 'open': 322.322, 'vol': 48400}, \
-        {'amount': 888.0411955957943, 'close': 322.227, 'count': 290, 'high': 322.39, 'id': 1569099600, 'low': 321.8, 'open': 322.123, 'vol': 28608}, \
-        {'amount': 3264.078831795959, 'close': 322.24, 'count': 1148, 'high': 322.857, 'id': 1569103200, 'low': 321.073, 'open': 322.353, 'vol': 105126}, \
-        {'amount': 4812.538411915699, 'close': 322.693, 'count': 1194, 'high': 323.809, 'id': 1569106800, 'low': 322.206, 'open': 322.376, 'vol': 155538}, \
-        {'amount': 8185.894636931124, 'close': 321.235, 'count': 1464, 'high': 323.01, 'id': 1569110400, 'low': 320.96, 'open': 322.694, 'vol': 263242}, \
-        {'amount': 76777.80128122136, 'close': 316.449, 'count': 9193, 'high': 321.336, 'id': 1569114000, 'low': 313, 'open': 321.234, 'vol': 2430996}, \
-        {'amount': 17193.1389445341, 'close': 317.144, 'count': 2602, 'high': 318.175, 'id': 1569117600, 'low': 314.888, 'open': 316.254, 'vol': 544668}, \
+    global g_KlineUpDwnSquence
+    global g_PrintFlag
+    g_PrintFlag = False
+    inputdata = [\
         {'amount': 17137.364187577074, 'close': 314.737, 'count': 3028, 'high': 317.259, 'id': 1569121200, 'low': 314.126, 'open': 317.144, 'vol': 540888}, \
         {'amount': 17796.991253268166, 'close': 315.697, 'count': 2957, 'high': 316.081, 'id': 1569124800, 'low': 313.673, 'open': 314.738, 'vol': 560246}, \
         {'amount': 13152.020335745643, 'close': 317.092, 'count': 2361, 'high': 318.04, 'id': 1569128400, 'low': 315.174, 'open': 315.71, 'vol': 416880}, \
         {'amount': 8614.527755853285, 'close': 315.642, 'count': 1422, 'high': 317.356, 'id': 1569132000, 'low': 315.091, 'open': 317.031, 'vol': 272368}, \
-        {'amount': 12063.814470932364, 'close': 317.906, 'count': 1993, 'high': 318.482, 'id': 1569135600, 'low': 315.461, 'open': 315.508, 'vol': 383192}, \
-        {'amount': 16373.879613046445, 'close': 317.712, 'count': 2588, 'high': 320, 'id': 1569139200, 'low': 317.5, 'open': 317.915, 'vol': 521812}, \
-        {'amount': 6921.5254447599555, 'close': 318.592, 'count': 1634, 'high': 318.592, 'id': 1569142800, 'low': 316.555, 'open': 317.713, 'vol': 219768}, \
-        {'amount': 8274.465069808428, 'close': 316.8, 'count': 1470, 'high': 318.799, 'id': 1569146400, 'low': 316.8, 'open': 318.593, 'vol': 262818}, \
-        {'amount': 6379.880079680207, 'close': 317.467, 'count': 1344, 'high': 317.898, 'id': 1569150000, 'low': 316.203, 'open': 316.8, 'vol': 202510}, \
-        {'amount': 6920.640048450254, 'close': 318.122, 'count': 1443, 'high': 318.85, 'id': 1569153600, 'low': 317.43, 'open': 317.527, 'vol': 220186}, \
-        {'amount': 13495.426031742722, 'close': 316.582, 'count': 2235, 'high': 319.198, 'id': 1569157200, 'low': 315.682, 'open': 318.121, 'vol': 427812}, \
-        {'amount': 8482.00525511388, 'close': 317.37, 'count': 1764, 'high': 317.512, 'id': 1569160800, 'low': 315.282, 'open': 316.581, 'vol': 268394}, \
-        {'amount': 2123.1893200035033, 'close': 317.136, 'count': 401, 'high': 317.5, 'id': 1569164400, 'low': 316.909, 'open': 317.37, 'vol': 67350}]
-
+        {'amount': 12063.814470932364, 'close': 317.906, 'count': 1993, 'high': 318.482, 'id': 1569135600, 'low': 315.461, 'open': 315.508, 'vol': 383192}]
+    g_KlineUpDwnSquence = g_KlineUpDwnSquence
     dataDecodeFromNet(inputdata)
 
-    global maxLine
-    global lowLine
-    global g_KlineUpDwnSquence
-    global g_PrintFlag
+    testCase("g_KlineUpDwnSquence by dataDecodeFromNet",g_KlineUpDwnSquence ,0x6)
 
-    pass
+    inputdata = [\
+        {'amount': 17137.364187577074, 'close': 314.737, 'count': 3028, 'high': 317.259, 'id': 1569121200, 'low': 314.126, 'open': 317.144, 'vol': 540888}, \
+        {'amount': 17796.991253268166, 'close': 315.697, 'count': 2957, 'high': 316.081, 'id': 1569124800, 'low': 313.673, 'open': 314.738, 'vol': 560246}, \
+        {'amount': 13152.020335745643, 'close': 317.092, 'count': 2361, 'high': 318.04, 'id': 1569128400, 'low': 315.174, 'open': 315.71, 'vol': 416880}, \
+        {'amount': 8614.527755853285, 'close': 315.642, 'count': 1422, 'high': 317.356, 'id': 1569132000, 'low': 315.091, 'open': 317.031, 'vol': 272368}, \
+        {'amount': 12063.814470932364, 'close': 317.906, 'count': 1993, 'high': 318.482, 'id': 1569135600, 'low': 315.461, 'open': 315.508, 'vol': 383192},\
+        {'amount': 12063.814470932364, 'close': 317.906, 'count': 1993, 'high': 318.482, 'id': 1569135600, 'low': 315.461, 'open': 317.906, 'vol': 383192}]
+    dataDecodeFromNet(inputdata)
+    testCase("g_KlineUpDwnSquence by dataDecodeFromNet",g_KlineUpDwnSquence ,0xD)
