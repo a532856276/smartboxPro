@@ -59,12 +59,20 @@ def dataDecodeFromNet(contractKLineLst):
         lastKlinePos = len(g_KlineSave) - 1
         index = len(contractKLineLst) - 1 - 1
 
-        halfOfLastKline = getHalfOfKline(contractKLineLst[index])
-        setHalf(halfOfLastKline)
-
         currentKline = getUpOrDwn(contractKLineLst[index])
         g_KlineUpDwnSequence = g_KlineUpDwnSequence << 1 | currentKline
         tempKline = copy.deepcopy(contractKLineLst[index])
+        half = getHalf()
+        if lastKline > currentKline:
+            if half > tempKline['close']:
+                setHalf(getHalfOfKline(tempKline))
+        elif lastKline < currentKline:
+            if half < tempKline['close']:
+                setHalf(getHalfOfKline(tempKline))
+        else:
+            if abs(tempKline['close'] - tempKline['open']) >= 20:
+                setHalf(getHalfOfKline(tempKline))
+            pass
 
         # nowStatus = ishammer(tempKline)
         nextDoing = getType(g_KlineSave[lastKlinePos], contractKLineLst[index])
@@ -126,6 +134,8 @@ def dataDecodeFromNet(contractKLineLst):
             halfOfLastKline = getHalfOfKline(contractKLineLst[index])
             setHalf(halfOfLastKline)
             g_KlineSave.append(tempKline)
+
+        print("dataDecodeFromNet: {0}".format(g_KlineUpDwnSequence))
 
 
 def getLastState():

@@ -21,7 +21,7 @@ from dataProcess.mycommondef import *
 g_RebootFlag = True
 
 FIXOPENPROFIT = 0.0005  # 持仓利润
-FIXCLOSEPROFIT = -0.0003  # 持仓利润
+FIXCLOSEPROFIT = -0.0001  # 持仓利润
 # a1 = 3.4
 # a2 = 3.6
 # a1 = math.ceil(a1)
@@ -645,13 +645,7 @@ def OrderSellOpenTread(args, kwargs):
         g_OrderSellOpenEvent.wait()
         g_OrderSellOpenEvent.clear()
 
-        # if OrderSellOpenTread.last - g_UpDownDir >= 2:
-        #     OrderSellOpenTread.last = g_UpDownDir
-        #     volume = 1
-        # else:
-        #     volume = 0
         volume = 1
-        global g_OrderSellOpenFlag
         if volume > 0:
             print(u'OrderSellOpenTread 开空命令：{0}'.format(volume))
             # logger.info(u'开空 执行成功！！！volume({0})price({1})'.format(volume, g_lastPrice))
@@ -659,11 +653,11 @@ def OrderSellOpenTread(args, kwargs):
             if optResult is not None and optResult['status'] == "ok":
                 print(u'开空命令：{0} 成功:optResult::{1}'.format(volume, optResult))
                 logger.info(u'开空 执行成功！！！volume({0})volume({1})'.format(volume, volume))
-                g_OrderSellOpenFlag = True
+                setOrderSellOpenFlag(True)
             else:
                 print(u'开空命令：{0} 失败 optResult:({1})'.format(volume, optResult))
                 logger.error(u'开空 执行失败！！！volume({0}), error message:{1}'.format(volume, optResult))
-                g_OrderSellOpenFlag = False
+                setOrderSellOpenFlag(False)
         # 撤销未成交的订单
         # Cancel_All_Contract_order()
 
@@ -676,18 +670,16 @@ def OrderBuyOpenTread(args, kwargs):
         g_OrderBuyOpenEvent.wait()
         g_OrderBuyOpenEvent.clear()
         volume = 1
-        global g_OrderBuyOpenFlag
-
         if volume > 0:
             print(u'OrderSellOpenTread 开多命令：{0}'.format(volume))
             # logger.info(u'开多 执行成功！！！volume({0})price({1})'.format(volume, g_lastPrice))
             optResult = SendContractOrder(volume=volume, direction="buy", offset="open", order_price_type="opponent")
             if optResult is not None and optResult['status'] == "ok":
-                g_OrderBuyOpenFlag = True
+                setOrderBuyOpenFlag(True)
                 print(u'开多命令：{0} 成功:{1}'.format(volume, optResult))
                 logger.info(u'开多 执行成功！！！volume({0})volume({1})optResult({2})'.format(volume, volume, optResult))
             else:
-                g_OrderBuyOpenFlag = False
+                setOrderBuyOpenFlag(False)
                 print(u'开多命令：({0})-- 失败 optResult:({1})'.format(volume, optResult))
                 logger.error(u'开多 执行失败！！！volume({0}), error message:{1}'.format(volume, optResult))
 
@@ -697,47 +689,51 @@ def OrderSellCloseTread(args, kwargs):
     while 1:
         g_OrderSellCloseEvent.wait()
         g_OrderSellCloseEvent.clear()
-        OrderSetVolume(u"平多", 30)  # 平多 30 %
+        OrderSetVolume(u"平多", 100)  # 平多 30 %
         # print(u'OrderSellCloseTread 进入平多-交易线程')
-        global g_OrderBuyOpenFlag
 
         volume = int(OrderGetVolume())
         if volume > 0:
             opt_result = SendContractOrder(volume=volume, direction="sell",
                                            offset="close", order_price_type="opponent")
             if opt_result is not None and opt_result['status'] == "ok":
-                g_OrderBuyOpenFlag = False
+                setOrderBuyOpenFlag(False)
                 print(u'OrderSellCloseTread 平多交易执行成功！！！volume({0})msg({1})'.format(volume, opt_result))
                 logger.info(u'平多交易线程 执行成功！！！volume({0})optResult({1})'.format(volume, opt_result))
             else:
+                opt_result = SendContractOrder(volume=volume, direction="sell",
+                                           offset="close", order_price_type="opponent")
                 logger.error(u'平多交易线程 执行失败！！！volume({0}), error message:{1}'.format(volume, opt_result))
         print(u'OrderSellCloseTread 退出平多-交易线程一次循环')
 
-
+def sendBuyCloseCmd(volume):
+    opt_result = SendContractOrder(volume=volume, direction="buy",
+                                    offset="close", order_price_type="opponent")
+    if opt_result is not None and opt_result['status'] == "ok":
+        setOrderSellOpenFlag(False)
+        print(u'OrderBuyCloseTread 平空交易线程 执行成功！！！volume({0})'.format(OrderGetVolume()))
+        logger.info(u'平空交易线程 执行成功！！！volume({0})optResult({1})'.format(volume, opt_result))
+        return True
+    else:
+        print(u'OrderBuyCloseTread 平空交易线程 执行失败！失败！！'
+                u'失败！！！volume({0}) opt_result({1})'.format(OrderGetVolume(), opt_result))
+        logger.error(u'平空交易线程 执行失败！！！volume({0}) error message:{1}'.format(volume, opt_result))
+        return False
 def OrderBuyCloseTread(args, kwargs):
     print(u'OrderBuyCloseTread 平空-交易线程 启动')
     while 1:
         g_OrderBuyCloseEvent.wait()
         g_OrderBuyCloseEvent.clear()
-        global g_OrderSellOpenFlag
-        OrderSetVolume(u"平空", 30)  # 平仓 30 %
+        OrderSetVolume(u"平空", 100)  # 平仓 30 %
         # print(u'OrderBuyCloseTread 进入平空--交易线程')
         volume = int(OrderGetVolume())
-        if volume > 0:
-            opt_result = SendContractOrder(volume=volume, direction="buy",
-                                           offset="close", order_price_type="opponent")
-            if opt_result is not None and opt_result['status'] == "ok":
-                g_OrderSellOpenFlag = False
-                print(u'OrderBuyCloseTread 平空交易线程 执行成功！！！volume({0})'.format(OrderGetVolume()))
-                logger.info(u'平空交易线程 执行成功！！！volume({0})optResult({1})'.format(volume, opt_result))
-            else:
-                print(u'OrderBuyCloseTread 平空交易线程 执行失败！失败！！'
-                     u'失败！！！volume({0}) opt_result({1})'.format(OrderGetVolume(), opt_result))
-                logger.error(u'平空交易线程 执行失败！！！volume({0}) error message:{1}'.format(volume, opt_result))
+        if volume > 0 and sendBuyCloseCmd(volume) == False:
+            sendBuyCloseCmd(volume)
         print(u'OrderBuyCloseTread 退出平空--交易线程一次循环')
 
 def GetContraInfoTread(args, kwargs):
     while True:
+        print(u'GetContraInfoTread 查询订单信息')
         g_GetContraInfoEvent.wait()
         g_GetContraInfoEvent.clear()
         OrderSetVolume(u"平空", 30)  # 平仓 30 %
