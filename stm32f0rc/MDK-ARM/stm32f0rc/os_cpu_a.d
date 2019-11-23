@@ -1,1 +1,0 @@
-stm32f0rc\os_cpu_a.o: ..\uCOS-II\Ports\os_cpu_a.asm

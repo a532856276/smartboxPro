@@ -383,11 +383,11 @@ ARM Macro Assembler    Page 6
               00000000 
 Command Line: --debug --xref --diag_suppress=9931 --cpu=Cortex-M0 --apcs=interw
 ork --depend=stm32f0rc\startup_stm32f030xc.d -ostm32f0rc\startup_stm32f030xc.o 
--ID:\smartbox\mxf0\stm32f0rc\MDK-ARM\RTE -ID:\install\ARM\PACK\ARM\CMSIS\4.2.0\
-CMSIS\Include -ID:\install\ARM\PACK\Keil\STM32F0xx_DFP\2.0.0 --predefine="__MIC
-ROLIB SETA 1" --predefine="__UVISION_VERSION SETA 514" --predefine="_RTE_ SETA 
-1" --predefine="STM32F030xC SETA 1" --list=startup_stm32f030xc.lst startup_stm3
-2f030xc.s
+-I..\\Inc -ID:\smartbox\mxf0\stm32f0rc\MDK-ARM\RTE -ID:\install\ARM\PACK\ARM\CM
+SIS\4.2.0\CMSIS\Include -ID:\install\ARM\PACK\Keil\STM32F0xx_DFP\2.0.0 --predef
+ine="__MICROLIB SETA 1" --predefine="__UVISION_VERSION SETA 514" --predefine="_
+RTE_ SETA 1" --predefine="STM32F030xC SETA 1" --list=startup_stm32f030xc.lst st
+artup_stm32f030xc.s
 
 
 
