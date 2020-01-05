@@ -62,6 +62,8 @@
 /* USER CODE END PM */
 
 /* Private variables ---------------------------------------------------------*/
+ADC_HandleTypeDef hadc;
+
 TIM_HandleTypeDef htim1;
 TIM_HandleTypeDef htim3;
 
@@ -74,6 +76,7 @@ void SystemClock_Config(void);
 static void MX_GPIO_Init(void);
 static void MX_TIM1_Init(void);
 static void MX_TIM3_Init(void);
+static void MX_ADC_Init(void);
 /* USER CODE BEGIN PFP */
 
 /* USER CODE END PFP */
@@ -85,18 +88,14 @@ static void MX_TIM3_Init(void);
 #define PAUSEFLAG    2
 #define PERSCALE		7999
 #define PRIODE			2999
-uint16_t g_Key = 0; /* 按键检测 */
-uint16_t g_Shake = 0; /* 抖动检测 */
-uint16_t g_Infrared = 0; /* 红外检测 */
-uint16_t g_Machin_Run = 0; /* 用于开 */
-uint16_t g_Machin_Reverse = 0;/* 用于关 */
-uint16_t g_Machin_Close = 0;/* 已经关 */
+uint16_t g_AdcOfIn = 0;/* 按键采样值 */
 
+UserSatus g_SysStatus = Initializations;/*  */
 
 static void Machin_GPIO_Control(uint16_t flag);
 
 static void Infraread_GPIO_Init(void);
-static void Stop_Mode_Init(void);
+static void StopMode_Init(void);
 
 
 /* USER CODE END 0 */
@@ -131,9 +130,10 @@ int main(void)
   MX_GPIO_Init();
   MX_TIM1_Init();
   MX_TIM3_Init();
+  MX_ADC_Init();
   /* USER CODE BEGIN 2 */
     Infraread_GPIO_Init();
-    Stop_Mode_Init();
+    StopMode_Init();
 
     //HAL_PWR_EnterSTOPMode(PWR_LOWPOWERREGULATOR_ON,PWR_STOPENTRY_WFI);
   /* USER CODE END 2 */
@@ -145,6 +145,7 @@ int main(void)
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
+    
     /*
         定时器1和3都是定时35s
         1/ 按键按下第一次 --- 打开 
@@ -154,58 +155,45 @@ int main(void)
         3/红外触发  --- 打开---30s后自动关闭
         	启动定时器1，打开盖子，定时器1到，停止电机，启动定时器3，持续打开，定时器3到，关闭盖子
     */
-    if(g_Key == 2){
-        HAL_TIM_Base_Start_IT(&htim1);
-        Machin_GPIO_Control(OPENFLAG);
-        g_Machin_Close = 1;
-    }
-    
-    if(g_Key == 4){
-        //HAL_TIM_Base_Stop_IT(&htim3);
-        HAL_TIM_Base_Start_IT(&htim1);
-        Machin_GPIO_Control(CLOSEFLAG);
-        g_Machin_Close = 0;
-        g_Machin_Reverse = 0;
-        g_Key = 0;
-    }
-
-    if(g_Infrared == 1){
-        HAL_NVIC_DisableIRQ(EXTI2_3_IRQn);
-        __HAL_GPIO_EXTI_CLEAR_IT(GPIO_PIN_5);
-        HAL_NVIC_DisableIRQ(EXTI4_15_IRQn);
-        __HAL_GPIO_EXTI_CLEAR_IT(GPIO_PIN_3);
-        HAL_TIM_Base_Start_IT(&htim1);
-        Machin_GPIO_Control(OPENFLAG);
-        g_Machin_Close = 1;
-			g_Machin_Run = 0;
-        g_Infrared = 0;
-    }
-
-    if(g_Machin_Run == 1){
-        Machin_GPIO_Control(PAUSEFLAG);
-		HAL_TIM_Base_Stop(&htim1);
-        if(g_Machin_Close == 1 && g_Key == 0) {
-            HAL_TIM_Base_Start_IT(&htim3);
-            g_Machin_Close = 0;
-					g_Machin_Reverse = 0;
-        } else {
+    switch(g_SysStatus)
+    {
+        case Initializations:
             __HAL_GPIO_EXTI_CLEAR_IT(GPIO_PIN_3);
             __HAL_GPIO_EXTI_CLEAR_IT(GPIO_PIN_5);
             HAL_NVIC_EnableIRQ(EXTI4_15_IRQn);
             HAL_NVIC_EnableIRQ(EXTI2_3_IRQn);
-					g_Infrared = 0;
-            //HAL_PWR_EnterSTOPMode(PWR_LOWPOWERREGULATOR_ON,PWR_STOPENTRY_WFI);
-        }
-        g_Machin_Run = 0;
+            g_SysStatus = Idle;
+            break;
+        case Idle:
+		    HAL_TIM_Base_Stop(&htim1);/* 停止转动定时器 */
+            HAL_ADC_Start(&hadc);
+            //HAL_PWR_EnterSTOPMode(PWR_LOWPOWERREGULATOR_ON, PWR_STOPENTRY_WFE);/* 进入省电模式 */
+            break;
+        case Open:
+            /* 清理中断标志 */
+            HAL_NVIC_DisableIRQ(EXTI2_3_IRQn);
+            __HAL_GPIO_EXTI_CLEAR_IT(GPIO_PIN_3);
+            HAL_NVIC_DisableIRQ(EXTI4_15_IRQn);
+            __HAL_GPIO_EXTI_CLEAR_IT(GPIO_PIN_5);
+            /* 启动 开定时器 */
+            HAL_TIM_Base_Start_IT(&htim1);
+            Machin_GPIO_Control(OPENFLAG);
+            //g_SysStatus = Pause;
+            break;
+        case Pause:
+            Machin_GPIO_Control(PAUSEFLAG);/* 暂停电机 */
+		    HAL_TIM_Base_Stop(&htim1);/* 停止转动定时器 */
+            HAL_TIM_Base_Start_IT(&htim3);/* 启动计时器 */
+            break;
+        case Close:
+            HAL_TIM_Base_Stop(&htim3);
+            HAL_TIM_Base_Start_IT(&htim1);
+            Machin_GPIO_Control(CLOSEFLAG);
+            break;
+        default:
+            break;
     }
-
-    if(g_Machin_Reverse == 1){
-			  HAL_TIM_Base_Stop(&htim3);
-        HAL_TIM_Base_Start_IT(&htim1);
-        Machin_GPIO_Control(CLOSEFLAG);
-        g_Machin_Close = 0;
-        g_Machin_Reverse = 0;
-    }
+    
   }
   /* USER CODE END 3 */
 }
@@ -221,9 +209,11 @@ void SystemClock_Config(void)
 
   /**Initializes the CPU, AHB and APB busses clocks 
   */
-  RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_HSI;
+  RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_HSI|RCC_OSCILLATORTYPE_HSI14;
   RCC_OscInitStruct.HSIState = RCC_HSI_ON;
+  RCC_OscInitStruct.HSI14State = RCC_HSI14_ON;
   RCC_OscInitStruct.HSICalibrationValue = RCC_HSICALIBRATION_DEFAULT;
+  RCC_OscInitStruct.HSI14CalibrationValue = 16;
   RCC_OscInitStruct.PLL.PLLState = RCC_PLL_NONE;
   if (HAL_RCC_OscConfig(&RCC_OscInitStruct) != HAL_OK)
   {
@@ -241,6 +231,66 @@ void SystemClock_Config(void)
   {
     Error_Handler();
   }
+}
+
+/**
+  * @brief ADC Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_ADC_Init(void)
+{
+
+  /* USER CODE BEGIN ADC_Init 0 */
+
+  /* USER CODE END ADC_Init 0 */
+
+  ADC_ChannelConfTypeDef sConfig = {0};
+
+  /* USER CODE BEGIN ADC_Init 1 */
+
+  /* USER CODE END ADC_Init 1 */
+  /**Configure the global features of the ADC (Clock, Resolution, Data Alignment and number of conversion) 
+  */
+  hadc.Instance = ADC1;
+  hadc.Init.ClockPrescaler = ADC_CLOCK_ASYNC_DIV1;
+  hadc.Init.Resolution = ADC_RESOLUTION_12B;
+  hadc.Init.DataAlign = ADC_DATAALIGN_RIGHT;
+  hadc.Init.ScanConvMode = ADC_SCAN_DIRECTION_FORWARD;
+  hadc.Init.EOCSelection = ADC_EOC_SINGLE_CONV;
+  hadc.Init.LowPowerAutoWait = DISABLE;
+  hadc.Init.LowPowerAutoPowerOff = DISABLE;
+  hadc.Init.ContinuousConvMode = DISABLE;
+  hadc.Init.DiscontinuousConvMode = DISABLE;
+  hadc.Init.ExternalTrigConv = ADC_SOFTWARE_START;
+  hadc.Init.ExternalTrigConvEdge = ADC_EXTERNALTRIGCONVEDGE_NONE;
+  hadc.Init.DMAContinuousRequests = DISABLE;
+  hadc.Init.Overrun = ADC_OVR_DATA_PRESERVED;
+  if (HAL_ADC_Init(&hadc) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /**Configure for the selected ADC regular channel to be converted. 
+  */
+  sConfig.Channel = ADC_CHANNEL_0;
+  sConfig.Rank = ADC_RANK_CHANNEL_NUMBER;
+  sConfig.SamplingTime = ADC_SAMPLETIME_1CYCLE_5;
+  if (HAL_ADC_ConfigChannel(&hadc, &sConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /**Configure for the selected ADC regular channel to be converted. 
+  */
+  sConfig.Channel = ADC_CHANNEL_7;
+  if (HAL_ADC_ConfigChannel(&hadc, &sConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN ADC_Init 2 */
+
+    HAL_ADC_Start_IT(&hadc); // 启动adc
+  /* USER CODE END ADC_Init 2 */
+
 }
 
 /**
@@ -268,9 +318,9 @@ static void MX_TIM1_Init(void)
 
   /* USER CODE END TIM1_Init 1 */
   htim1.Instance = TIM1;
-  htim1.Init.Prescaler = 7999;
+  htim1.Init.Prescaler = 55999;
   htim1.Init.CounterMode = TIM_COUNTERMODE_UP;
-  htim1.Init.Period = 2999;
+  htim1.Init.Period = 4999;
   htim1.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
   htim1.Init.RepetitionCounter = 0;
   htim1.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_ENABLE;
@@ -314,9 +364,9 @@ static void MX_TIM3_Init(void)
 
   /* USER CODE END TIM3_Init 1 */
   htim3.Instance = TIM3;
-  htim3.Init.Prescaler = 7999;
+  htim3.Init.Prescaler = 55999;
   htim3.Init.CounterMode = TIM_COUNTERMODE_UP;
-  htim3.Init.Period = 2999;
+  htim3.Init.Period = 4999;
   htim3.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
   htim3.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_ENABLE;
   if (HAL_TIM_Base_Init(&htim3) != HAL_OK)
@@ -363,7 +413,7 @@ static void MX_GPIO_Init(void)
   HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
 
   /*Configure GPIO pins : PA3 PA5 PA6 */
-  GPIO_InitStruct.Pin = GPIO_PIN_3|GPIO_PIN_5;
+  GPIO_InitStruct.Pin = GPIO_PIN_3|GPIO_PIN_5|GPIO_PIN_6;
   GPIO_InitStruct.Mode = GPIO_MODE_IT_RISING;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
@@ -415,12 +465,12 @@ static void Infraread_GPIO_Init(void)
     HAL_NVIC_EnableIRQ(EXTI4_15_IRQn);
 }
 
-static void Stop_Mode_Init(void)
+static void StopMode_Init(void)
 {
     __HAL_RCC_PWR_CLK_ENABLE();
 }
 
-void StopClkInit(void)
+void StopModeClkInit(void)
 {
     //__HAL_RCC_HSI_ENABLE();
     //SystemClock_Config();
@@ -428,21 +478,20 @@ void StopClkInit(void)
 
 void InterruptProcess(void)
 {
-    if((g_Infrared == 0) && (g_Machin_Close == 0)) {
-        g_Infrared = 1;
-        StopClkInit();
-    }
+    StopModeClkInit();
 }
 void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
 {
     switch(GPIO_Pin)
     {
         case GPIO_PIN_3:
-            InterruptProcess(); /* 红外和抖动 加或门 */
+            //InterruptProcess(); /* 红外和抖动 加或门 */
+            g_SysStatus = Open;
             break;
         case GPIO_PIN_5:
-            InterruptProcess();
+            //InterruptProcess();
             //g_Key +=2;
+            g_SysStatus = Open;
             break;
         case GPIO_PIN_6:
             //;
@@ -450,8 +499,20 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
         default:
             break;
     }
+
+    StopModeClkInit();
 }
 
+
+void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef* hadc)
+{
+    if(hadc->Instance == ADC1)
+    {
+        g_AdcOfIn = HAL_ADC_GetValue(hadc);// 获取adc的值
+    }
+
+    StopModeClkInit();
+}
 
 /* USER CODE END 4 */
 

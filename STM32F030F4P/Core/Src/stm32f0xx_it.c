@@ -67,12 +67,11 @@
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
-extern uint16_t g_Machin_Run; /* 用于开 */
-extern uint16_t g_Machin_Reverse;/* 用于关 */
-
+extern UserSatus g_SysStatus;
 /* USER CODE END 0 */
 
 /* External variables --------------------------------------------------------*/
+extern ADC_HandleTypeDef hadc;
 extern TIM_HandleTypeDef htim1;
 extern TIM_HandleTypeDef htim3;
 /* USER CODE BEGIN EV */
@@ -158,6 +157,20 @@ void SysTick_Handler(void)
 /******************************************************************************/
 
 /**
+  * @brief This function handles ADC interrupt.
+  */
+void ADC1_IRQHandler(void)
+{
+  /* USER CODE BEGIN ADC1_IRQn 0 */
+
+  /* USER CODE END ADC1_IRQn 0 */
+  HAL_ADC_IRQHandler(&hadc);
+  /* USER CODE BEGIN ADC1_IRQn 1 */
+
+  /* USER CODE END ADC1_IRQn 1 */
+}
+
+/**
   * @brief This function handles TIM1 break, update, trigger and commutation interrupts.
   */
 void TIM1_BRK_UP_TRG_COM_IRQHandler(void)
@@ -167,7 +180,10 @@ void TIM1_BRK_UP_TRG_COM_IRQHandler(void)
   /* USER CODE END TIM1_BRK_UP_TRG_COM_IRQn 0 */
   HAL_TIM_IRQHandler(&htim1);
   /* USER CODE BEGIN TIM1_BRK_UP_TRG_COM_IRQn 1 */
-    g_Machin_Run = 1;
+  if (g_SysStatus == Open)
+    g_SysStatus = Pause;
+  else
+    g_SysStatus = Initializations;
   //HAL_TIM_Base_Stop(&htim1);
   /* USER CODE END TIM1_BRK_UP_TRG_COM_IRQn 1 */
 }
@@ -181,8 +197,8 @@ void TIM3_IRQHandler(void)
 
   /* USER CODE END TIM3_IRQn 0 */
   HAL_TIM_IRQHandler(&htim3);
-  /* USER CODE BEGIN TIM3_IRQn 1 */
-    g_Machin_Reverse = 1;
+  /* USER CODE BEGIN TIM3_IRQn 1 */	
+  g_SysStatus = Close; /* 关 */
   //HAL_TIM_Base_Stop(&htim3);
   /* USER CODE END TIM3_IRQn 1 */
 }
@@ -205,5 +221,6 @@ void EXTI4_15_IRQHandler(void)
         HAL_GPIO_EXTI_IRQHandler(GPIO_PIN_5);
      }
 }
+
 /* USER CODE END 1 */
 /************************ (C) COPYRIGHT STMicroelectronics *****END OF FILE****/

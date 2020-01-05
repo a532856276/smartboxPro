@@ -3,6 +3,8 @@
 "stm32f030f4p\main.o"
 "stm32f030f4p\stm32f0xx_it.o"
 "stm32f030f4p\stm32f0xx_hal_msp.o"
+"stm32f030f4p\stm32f0xx_hal_adc.o"
+"stm32f030f4p\stm32f0xx_hal_adc_ex.o"
 "stm32f030f4p\stm32f0xx_hal_tim.o"
 "stm32f030f4p\stm32f0xx_hal_tim_ex.o"
 "stm32f030f4p\stm32f0xx_hal_rcc.o"
