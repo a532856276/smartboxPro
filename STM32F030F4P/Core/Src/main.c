@@ -93,6 +93,8 @@ uint16_t g_AdcOfIn = 0;/* 按键采样值 */
 UserSatus g_SysStatus = Initializations;/*  */
 
 static void Machin_GPIO_Control(uint16_t flag);
+void Time_Delay(uint16_t delaytime);
+static void GPIO_Control_Test(uint16_t flag);
 
 static void Infraread_GPIO_Init(void);
 static void StopMode_Init(void);
@@ -130,7 +132,7 @@ int main(void)
   MX_GPIO_Init();
   MX_TIM1_Init();
   MX_TIM3_Init();
-  MX_ADC_Init();
+  //MX_ADC_Init();
   /* USER CODE BEGIN 2 */
     Infraread_GPIO_Init();
     StopMode_Init();
@@ -145,7 +147,8 @@ int main(void)
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
-    
+    //GPIO_Control_Test(1);
+    //continue;
     /*
         定时器1和3都是定时35s
         1/ 按键按下第一次 --- 打开 
@@ -158,6 +161,8 @@ int main(void)
     switch(g_SysStatus)
     {
         case Initializations:
+            HAL_TIM_Base_Stop(&htim1);/* 停止转动定时器 */
+			Machin_GPIO_Control(PAUSEFLAG);
             __HAL_GPIO_EXTI_CLEAR_IT(GPIO_PIN_3);
             __HAL_GPIO_EXTI_CLEAR_IT(GPIO_PIN_5);
             HAL_NVIC_EnableIRQ(EXTI4_15_IRQn);
@@ -165,10 +170,11 @@ int main(void)
             g_SysStatus = Idle;
             break;
         case Idle:
-		    HAL_TIM_Base_Stop(&htim1);/* 停止转动定时器 */
+						//HAL_TIM_Base_Stop(&htim1);/* 停止转动定时器 */
+						//Machin_GPIO_Control(PAUSEFLAG);
             HAL_ADC_Start(&hadc);
             //HAL_PWR_EnterSTOPMode(PWR_LOWPOWERREGULATOR_ON, PWR_STOPENTRY_WFE);/* 进入省电模式 */
-            break;
+						break;
         case Open:
             /* 清理中断标志 */
             HAL_NVIC_DisableIRQ(EXTI2_3_IRQn);
@@ -178,17 +184,19 @@ int main(void)
             /* 启动 开定时器 */
             HAL_TIM_Base_Start_IT(&htim1);
             Machin_GPIO_Control(OPENFLAG);
-            //g_SysStatus = Pause;
+            g_SysStatus = Default;
             break;
         case Pause:
             Machin_GPIO_Control(PAUSEFLAG);/* 暂停电机 */
 		    HAL_TIM_Base_Stop(&htim1);/* 停止转动定时器 */
             HAL_TIM_Base_Start_IT(&htim3);/* 启动计时器 */
+            g_SysStatus = Default;
             break;
         case Close:
             HAL_TIM_Base_Stop(&htim3);
             HAL_TIM_Base_Start_IT(&htim1);
             Machin_GPIO_Control(CLOSEFLAG);
+            g_SysStatus = IsOK;
             break;
         default:
             break;
@@ -318,9 +326,9 @@ static void MX_TIM1_Init(void)
 
   /* USER CODE END TIM1_Init 1 */
   htim1.Instance = TIM1;
-  htim1.Init.Prescaler = 55999;
+  htim1.Init.Prescaler = PERSCALE;
   htim1.Init.CounterMode = TIM_COUNTERMODE_UP;
-  htim1.Init.Period = 4999;
+  htim1.Init.Period = PRIODE;
   htim1.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
   htim1.Init.RepetitionCounter = 0;
   htim1.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_ENABLE;
@@ -364,9 +372,9 @@ static void MX_TIM3_Init(void)
 
   /* USER CODE END TIM3_Init 1 */
   htim3.Instance = TIM3;
-  htim3.Init.Prescaler = 55999;
+  htim3.Init.Prescaler = PERSCALE;
   htim3.Init.CounterMode = TIM_COUNTERMODE_UP;
-  htim3.Init.Period = 4999;
+  htim3.Init.Period = PRIODE;
   htim3.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
   htim3.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_ENABLE;
   if (HAL_TIM_Base_Init(&htim3) != HAL_OK)
@@ -408,14 +416,15 @@ static void MX_GPIO_Init(void)
   /*Configure GPIO pins : PA1 PA2 PA4 */
   GPIO_InitStruct.Pin = GPIO_PIN_1|GPIO_PIN_2|GPIO_PIN_4;
   GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
-  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  GPIO_InitStruct.Pull = GPIO_PULLUP;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
   HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
 
   /*Configure GPIO pins : PA3 PA5 PA6 */
   GPIO_InitStruct.Pin = GPIO_PIN_3|GPIO_PIN_5|GPIO_PIN_6;
-  GPIO_InitStruct.Mode = GPIO_MODE_IT_RISING;
-  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  GPIO_InitStruct.Mode = GPIO_MODE_IT_RISING_FALLING;
+  GPIO_InitStruct.Pull = GPIO_PULLUP;
+  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_HIGH;
   HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
 
   /*Configure GPIO pins : PA9 PA10 */
@@ -437,22 +446,42 @@ static void Machin_GPIO_Control(uint16_t flag)
             HAL_GPIO_WritePin(GPIOA,GPIO_PIN_1,GPIO_PIN_SET);
             HAL_GPIO_WritePin(GPIOA,GPIO_PIN_2,GPIO_PIN_RESET);
 
-            HAL_GPIO_WritePin(GPIOA,GPIO_PIN_4,GPIO_PIN_RESET); /* 灯亮 */
+            HAL_GPIO_WritePin(GPIOA,GPIO_PIN_4,GPIO_PIN_SET); /* 灯亮 */
             break;
         case 1: /* 关 */
             HAL_GPIO_WritePin(GPIOA,GPIO_PIN_1,GPIO_PIN_RESET);
             HAL_GPIO_WritePin(GPIOA,GPIO_PIN_2,GPIO_PIN_SET);
 
-            HAL_GPIO_WritePin(GPIOA,GPIO_PIN_4,GPIO_PIN_RESET); /* 灯亮 */
+            HAL_GPIO_WritePin(GPIOA,GPIO_PIN_4,GPIO_PIN_SET); /* 灯亮 */
             break;
         default:
             HAL_GPIO_WritePin(GPIOA,GPIO_PIN_1,GPIO_PIN_RESET);
             HAL_GPIO_WritePin(GPIOA,GPIO_PIN_2,GPIO_PIN_RESET);
 
-            HAL_GPIO_WritePin(GPIOA,GPIO_PIN_4,GPIO_PIN_SET); /* 灯灭 */
+            HAL_GPIO_WritePin(GPIOA,GPIO_PIN_4,GPIO_PIN_RESET); /* 灯灭 */
             break;
     }
 }
+
+void Time_Delay(uint16_t delaytime)
+{
+    uint16_t i,j;
+		uint16_t m = 0;
+    for(i = 0; i < delaytime; i++)
+    {
+        for(j = 0; j < 250; j++)
+            m++;
+    }
+}
+
+static void GPIO_Control_Test(uint16_t flag)
+{
+    HAL_GPIO_WritePin(GPIOA,GPIO_PIN_4,GPIO_PIN_SET); /* 灯亮 */
+    Time_Delay(250);
+    HAL_GPIO_WritePin(GPIOA,GPIO_PIN_4,GPIO_PIN_RESET); /* 灯灭 */   
+    Time_Delay(250);
+}
+
 
 static void Infraread_GPIO_Init(void)
 {

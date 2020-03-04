@@ -85,7 +85,9 @@ typedef enum {
     Idle,
     Open,
     Pause,
-    Close
+    Close,
+    Default,
+    IsOK
 } UserSatus;
 /* USER CODE END Private defines */
 

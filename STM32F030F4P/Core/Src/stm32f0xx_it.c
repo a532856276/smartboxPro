@@ -180,10 +180,15 @@ void TIM1_BRK_UP_TRG_COM_IRQHandler(void)
   /* USER CODE END TIM1_BRK_UP_TRG_COM_IRQn 0 */
   HAL_TIM_IRQHandler(&htim1);
   /* USER CODE BEGIN TIM1_BRK_UP_TRG_COM_IRQn 1 */
-  if (g_SysStatus == Open)
+  if (g_SysStatus == Default)
+  {
     g_SysStatus = Pause;
-  else
+  }
+  else if (g_SysStatus == IsOK)
+  {
     g_SysStatus = Initializations;
+  }
+
   //HAL_TIM_Base_Stop(&htim1);
   /* USER CODE END TIM1_BRK_UP_TRG_COM_IRQn 1 */
 }
